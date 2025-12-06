@@ -21,6 +21,9 @@ module.exports = {
           900: '#14532d',
         },
       },
+      fontFamily: {
+        sans: ['Poppins', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial'],
+      },
     },
   },
   plugins: [],
