@@ -46,8 +46,8 @@ export default async function handler(req, res) {
                 soilMoisture: data.soilMoisture ?? "DRY",
                 pumpStatus: data.pumpStatus ?? "OFF",
                 fanStatus: data.fanStatus ?? "OFF",
-                timestamp: Timestamp.now(),
-                pollution: data.pollution ?? 0
+                pollution: data.pollution ?? data.gasLevel ?? 0,
+                timestamp: Timestamp.now()
             };
 
             // 2. Update Dokumen Data Terbaru (Menggantikan logic latestData = ...)
