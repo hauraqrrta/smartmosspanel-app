@@ -23,14 +23,11 @@ function HeaderStatusBar({ isOnline, lastUpdate }) {
 
 // --- MAIN COMPONENT: Home ---
 export default function Home() {
-  // ... (State dan useEffect tetap sama)
-  const [data, setData] = useState({
-    temperature: 0, humidity: 0, soilMoisture: "DRY", pumpStatus: "OFF", fanStatus: "OFF", timestamp: Date.now()
-  });
-  
-  const [history, setHistory] = useState([]);
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const [isOnline, setIsOnline] = useState(false);
+  // ... (State dan useEffect tetap sama)
+  const [data, setData] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [isOnline, setIsOnline] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -102,7 +99,8 @@ export default function Home() {
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-0 h-[calc(100vh-4rem)] overflow-visible">
                 {/* Left: 4 stat boxes in 2x2 grid (occupies two columns) */}
                 <div className="lg:col-span-2 h-full">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 grid-rows-2 gap-4 h-full">
+                  {data ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 grid-rows-2 gap-4 h-full">
                     <div className="bg-white rounded-2xl p-6 shadow-xl h-full">
                       <div className="flex items-center justify-between mb-2">
                         <div className="text-2xl">🌡️</div>
@@ -139,14 +137,23 @@ export default function Home() {
                     <div className="bg-white rounded-2xl p-6 shadow-xl h-full">
                       <div className="flex items-center justify-between mb-2">
                         <div className="text-2xl">🟣</div>
-                        <div className={`px-2 py-0.5 rounded-full text-xs font-semibold ${data.polutionLevel && data.polutionLevel > 100 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
-                          {data.polutionLevel ? (data.polutionLevel > 100 ? 'High' : 'Normal') : 'N/A'}
+                        <div className={`px-2 py-0.5 rounded-full text-xs font-semibold ${data.pollution && data.pollution > 100 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
+                          {data.pollution ? (data.pollution > 100 ? 'High' : 'Normal') : 'N/A'}
                         </div>
                       </div>
                       <h4 className="text-gray-600 text-sm">Pollution</h4>
-                      <div className="text-3xl md:text-4xl font-bold text-gray-800">{data.polutionLevel ?? '—'}</div>
+                      <div className="text-3xl md:text-4xl font-bold text-gray-800">{data.pollution ?? '—'}</div>
                     </div>
                   </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-full bg-white rounded-2xl p-6 shadow-xl">
+                      <div className="text-center">
+                        <div className="text-5xl mb-4">⏳</div>
+                        <p className="text-lg text-gray-600 font-semibold">Waiting for ESP32...</p>
+                        <p className="text-sm text-gray-400 mt-2">Koneksi ke sensor sedang diproses</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right: System Health chart */}
