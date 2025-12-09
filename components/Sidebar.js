@@ -6,6 +6,7 @@ export default function Sidebar() {
   const router = useRouter()
   const navItems = [
     { label: 'Dashboard', iconClass: 'fas fa-tachometer-alt', href: '/' },
+    { label: 'Control', iconClass: 'fas fa-sliders-h', href: '/control' },
     { label: 'Devices', iconClass: 'fas fa-layer-group', href: '/devices' },
     { label: 'Settings', iconClass: 'fas fa-cog', href: '/settings' },
   ]

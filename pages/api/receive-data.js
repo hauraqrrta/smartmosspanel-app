@@ -1,7 +1,3 @@
-// pages/api/receive-data.js
-
-// Import Firebase Functions
-// PASTIKAN Anda memiliki file lib/firebase.js dengan konfigurasi dan export 'db'
 import { db } from '../../lib/firebase'; 
 import { 
     doc, 
@@ -12,7 +8,8 @@ import {
     limit, 
     getDocs, 
     getDoc,
-    Timestamp 
+    Timestamp,
+    where 
 } from 'firebase/firestore'; 
 
 // --- KONSTANTA FIREBASE ---
@@ -39,6 +36,10 @@ export default async function handler(req, res) {
         try {
             const data = req.body;
             
+            // Tentukan panelId yang diterima dari ESP32 (harus dikirim di body POST)
+            // Jika tidak ada, gunakan 'default'
+            const receivedPanelId = data.panelId ?? 'default'; 
+            
             // 1. Buat Objek Data Baru
             const newData = {
                 temperature: data.temperature ?? 0,
@@ -47,13 +48,15 @@ export default async function handler(req, res) {
                 pumpStatus: data.pumpStatus ?? "OFF",
                 fanStatus: data.fanStatus ?? "OFF",
                 pollution: data.pollution ?? data.gasLevel ?? 0,
+                panelId: receivedPanelId, // <-- TAMBAHAN: Menyimpan ID Panel
                 timestamp: Timestamp.now()
             };
 
-            // 2. Update Dokumen Data Terbaru (Menggantikan logic latestData = ...)
+            // 2. Update Dokumen Data Terbaru (latest_data)
+            // NOTE: Dokumen ini akan menyimpan data latest dari panel terakhir yang mengirim.
             await setDoc(doc(db, HISTORY_COLLECTION, LATEST_DOC_ID), newData);
 
-            // 3. Tambahkan Data ke Koleksi Riwayat (Menggantikan logic dataHistory.push)
+            // 3. Tambahkan Data ke Koleksi Riwayat
             const historyDocId = Date.now().toString(); 
             await setDoc(doc(db, HISTORY_COLLECTION, historyDocId), newData);
 
@@ -78,34 +81,49 @@ export default async function handler(req, res) {
     // ------------------------------------------------------------------
     if (req.method === 'GET') {
         let latestData = null;
-        let dataHistory = []; // Variabel lokal untuk menampung hasil query
+        let dataHistory = []; 
+        
+        // 1. Ambil Panel ID dari URL Query Dashboard
+        const requestedPanelId = req.query.panelId;
 
+        // Jika panelId tidak disertakan dalam query URL (misalnya ?panelId=smp001)
+        if (!requestedPanelId) {
+            // Berikan error atau default ke 'default' tergantung kebutuhan keamanan Anda
+            return res.status(401).json({ success: false, error: 'Panel ID is required in URL query.' });
+        }
+        
         try {
-            // 1. Ambil Data Terbaru
-            const latestDocRef = doc(db, HISTORY_COLLECTION, LATEST_DOC_ID);
-            const latestDocSnap = await getDoc(latestDocRef);
+            const historyRef = collection(db, HISTORY_COLLECTION);
 
-            if (latestDocSnap.exists()) {
+            // 2. Tentukan Query dengan Filter (Menggantikan pengambilan LATEST_DOC_ID)
+            const q = query(
+                historyRef,
+                where('panelId', '==', requestedPanelId), // <-- FILTER UTAMA BERDASARKAN ID PANEL
+                orderBy('timestamp', 'desc'), 
+                limit(MAX_HISTORY)
+            ); 
+            
+            const historySnapshot = await getDocs(q);
+            
+            // 3. Proses Hasil Snapshot
+            
+            // Ambil data terbaru dari hasil query history yang sudah difilter
+            if (historySnapshot.docs.length > 0) {
+                const latestDoc = historySnapshot.docs[0].data();
                 latestData = {
-                    ...latestDocSnap.data(),
-                    timestamp: latestDocSnap.data().timestamp.toDate().getTime()
+                    ...latestDoc,
+                    timestamp: latestDoc.timestamp.toDate().getTime()
                 };
             }
-
-            // 2. Ambil Riwayat (50 data terakhir, diurutkan descending)
-            // Ini menggantikan pembacaan dari array dataHistory lokal
-            const historyRef = collection(db, HISTORY_COLLECTION);
-            const q = query(historyRef, orderBy('timestamp', 'desc'), limit(MAX_HISTORY)); 
-            const historySnapshot = await getDocs(q);
-
+            
+            // Isi array dataHistory dengan riwayat yang difilter
             historySnapshot.forEach((doc) => {
                 const data = doc.data();
-                if (doc.id !== LATEST_DOC_ID) { 
-                    dataHistory.unshift({ // unshift untuk memastikan urutan waktu yang benar (terlama di depan)
-                        ...data,
-                        timestamp: data.timestamp.toDate().getTime()
-                    });
-                }
+                // Data ini sudah terfilter berdasarkan panelId
+                dataHistory.unshift({ 
+                    ...data,
+                    timestamp: data.timestamp.toDate().getTime()
+                });
             });
 
             const hasData = !!latestData;
