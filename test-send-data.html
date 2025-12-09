@@ -19,7 +19,7 @@
             };
 
             try {
-                const response = await fetch('/api/receive-data', {
+                const response = await fetch('http://localhost:3002/api/receive-data?panelId=panel01', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

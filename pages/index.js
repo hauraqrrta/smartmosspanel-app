@@ -50,28 +50,36 @@ export default function Home() {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch('/api/receive-data');
-        const result = await response.json();
-        
-        if (result.success) {
-          setData(result.latest);
-          setHistory(result.history);
-          setLastUpdate(new Date());
-          setIsOnline(true);
-        } else if (!result.success && result.latest === null) {
-            setIsOnline(false);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setIsOnline(false);
-      }
-    };
+  useEffect(() => {
+    const fetchData = async () => {
+      const panelId = Cookies.get('panelId');
 
-    fetchData(); 
-    const interval = setInterval(fetchData, 5000); 
+      if (!panelId) {
+        console.warn('Panel ID cookie tidak ada. Pastikan sudah login.');
+        setIsOnline(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/receive-data?panelId=${panelId}`);
+        const result = await response.json();
+
+        if (result.success) {
+          setData(result.latest);
+          setHistory(result.history);
+          setLastUpdate(new Date());
+          setIsOnline(true);
+        } else if (!result.success && result.latest === null) {
+          setIsOnline(false);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        setIsOnline(false);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
 
     return () => clearInterval(interval);
   }, []);
