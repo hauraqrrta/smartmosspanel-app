@@ -6,27 +6,6 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import Sidebar from '../components/Sidebar';
 import Cookies from 'js-cookie';
 
-async function fetchDashboardData() {
-    // 1. Ambil panelId dari cookie yang sudah diset saat login
-    const panelId = Cookies.get('panelId'); 
-    
-    if (!panelId) {
-        console.error("Panel ID tidak ditemukan di cookie.");
-        return { latest: null, history: [] };
-    }
-
-    // 2. Tambahkan panelId sebagai query parameter saat fetch data
-    const res = await fetch(`/api/receive-data?panelId=${panelId}`); 
-    
-    if (res.status === 200) {
-        const data = await res.json();
-        return data;
-    } else {
-        console.error("Gagal fetch data dari API.");
-        return { latest: null, history: [] };
-    }
-}
-
 function HeaderStatusBar({ isOnline, lastUpdate }) {
   return (
     <div className="w-full">
@@ -34,57 +13,85 @@ function HeaderStatusBar({ isOnline, lastUpdate }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-300'}`} />
-            <div className="text-sm font-medium text-gray-700">{isOnline ? 'Device Online' : 'Device Offline'}</div>
+            <div className="text-sm font-medium text-gray-700">
+              {isOnline ? 'Device Online' : 'Device Offline'}
+            </div>
           </div>
+          {lastUpdate && (
+            <div className="text-xs text-gray-500">
+              Last Update: {lastUpdate.toLocaleTimeString('id-ID')}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-// --- MAIN COMPONENT: Home ---
 export default function Home() {
-  // ... (State dan useEffect tetap sama)
   const [data, setData] = useState(null);
   const [history, setHistory] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
+  const [panelId, setPanelId] = useState(null);
 
+  // Get panelId from cookie on mount
   useEffect(() => {
-    const fetchData = async () => {
-      const panelId = Cookies.get('panelId');
-
-      if (!panelId) {
-        console.warn('Panel ID cookie tidak ada. Pastikan sudah login.');
-        setIsOnline(false);
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/receive-data?panelId=${panelId}`);
-        const result = await response.json();
-
-        if (result.success) {
-          setData(result.latest);
-          setHistory(result.history);
-          setLastUpdate(new Date());
-          setIsOnline(true);
-        } else if (!result.success && result.latest === null) {
-          setIsOnline(false);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setIsOnline(false);
-      }
-    };
-
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-
-    return () => clearInterval(interval);
+    const storedPanelId = Cookies.get('panelId');
+    if (storedPanelId) {
+      setPanelId(storedPanelId);
+      console.log('✅ Panel ID dari cookie:', storedPanelId);
+    } else {
+      console.error('❌ Panel ID tidak ditemukan di cookie!');
+    }
   }, []);
 
-  // Enforce no-scroll at document level while this page is mounted.
+  const fetchData = async () => {
+    if (!panelId) {
+      console.log('⏳ Menunggu Panel ID...');
+      return;
+    }
+
+    try {
+      const url = `https://smartmosspanel.vercel.app/api/receive-data?panelId=${panelId}`;
+      console.log('📡 Fetching from:', url);
+      
+      const response = await fetch(url);
+      const result = await response.json();
+      
+      console.log('📦 Response:', result);
+      
+      if (result.success && result.latest) {
+        console.log('✅ Data diterima:', result.latest);
+        setData(result.latest);
+        setHistory(result.history || []);
+        setLastUpdate(new Date());
+        setIsOnline(true);
+      } else {
+        console.log('⚠️ No data available');
+        setIsOnline(false);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching data:', error);
+      setIsOnline(false);
+    }
+  };
+
+  // Fetch data setiap 5 detik setelah panelId tersedia
+  useEffect(() => {
+    if (!panelId) return;
+
+    console.log('🔄 Starting polling with panelId:', panelId);
+    fetchData(); // Initial fetch
+    const interval = setInterval(fetchData, 5000);
+    
+    return () => {
+      console.log('🛑 Stopping polling');
+      clearInterval(interval);
+    };
+  }, [panelId]);
+
+  // Enforce no-scroll
   useEffect(() => {
     const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevBodyOverflow = document.body.style.overflow;
@@ -107,86 +114,97 @@ export default function Home() {
     };
   });
 
-  return (
-    <>
-      <Head>
-        <title>Smart Moss Panel </title>
-        <meta name="description" content="Smart Moss Panel Monitoring System" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
+  return (
+    <>
+      <Head>
+        <title>Smart Moss Panel</title>
+        <meta name="description" content="Smart Moss Panel Monitoring System" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
 
-  {/* CONTAINER UTAMA: FLEX ROW (Menghapus padding/margin global) */}
-  {/* Menggunakan h-screen agar layout sidebar-main mengisi layar */}
-  <div className="flex w-full min-h-screen bg-gradient-to-br from-gray-50 via-green-50 to-emerald-50"> 
+      <div className="flex w-full min-h-screen bg-gradient-to-br from-gray-50 via-green-50 to-emerald-50"> 
+        <Sidebar />
 
-  {/* SIDEBAR (W-64) - KIRI */}
-  {/* Responsive: hidden on small screens, fixed on md+ so main scrolls independently */}
-  <Sidebar />
-
-  {/* MAIN CONTENT AREA (flex-1) - KANAN */}
-  {/* Add left margin on md+ to accommodate fixed sidebar */}
-  <main className="flex-1 overflow-hidden md:ml-64"> 
-          {/* Wrapper untuk mengatur padding horizontal di konten utama (no vertical padding) */}
+        <main className="flex-1 overflow-hidden md:ml-64"> 
           <div className="px-8">
             <div className="max-w-7xl mx-auto pb-4">
-              {/* Two-column layout: left - four stat boxes; right - system health line chart */}
-              {/* Height set to remaining viewport: 100vh minus header (4rem) */}
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-0 h-[calc(100vh-4rem)] overflow-visible">
-                {/* Left: 4 stat boxes in 2x2 grid (occupies two columns) */}
+              {/* Panel ID Debug Info */}
+              {panelId && (
+                <div className="mb-4 p-2 bg-blue-100 rounded text-xs">
+                  <strong>Panel ID:</strong> {panelId}
+                </div>
+              )}
+
+              <HeaderStatusBar isOnline={isOnline} lastUpdate={lastUpdate} />
+
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-6 h-[calc(100vh-8rem)] overflow-visible">
+                {/* Left: 4 stat boxes */}
                 <div className="lg:col-span-2 h-full">
                   {data ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 grid-rows-2 gap-4 h-full">
-                    <div className="bg-gradient-to-br from-white to-red-50 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 h-full border border-red-100">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-3xl">🌡️</div>
-                        <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${data.temperature > 30 ? 'bg-red-500 text-white' : data.temperature > 24 ? 'bg-orange-400 text-white' : 'bg-green-500 text-white'}`}>
-                          {data.temperature > 30 ? 'High' : data.temperature > 24 ? 'Warm' : 'Normal'}
+                      {/* Temperature */}
+                      <div className="bg-gradient-to-br from-white to-red-50 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 h-full border border-red-100">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-3xl">🌡️</div>
+                          <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${data.temperature > 30 ? 'bg-red-500 text-white' : data.temperature > 24 ? 'bg-orange-400 text-white' : 'bg-green-500 text-white'}`}>
+                            {data.temperature > 30 ? 'High' : data.temperature > 24 ? 'Warm' : 'Normal'}
+                          </div>
+                        </div>
+                        <h4 className="text-gray-600 text-sm font-semibold mb-2">Temperature</h4>
+                        <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
+                          {data.temperature.toFixed(1)}°C
                         </div>
                       </div>
-                      <h4 className="text-gray-600 text-sm font-semibold mb-2">Temperature</h4>
-                      <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">{data.temperature.toFixed(1)}°C</div>
-                    </div>
 
-                    <div className="bg-gradient-to-br from-white to-blue-50 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 h-full border border-blue-100">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-3xl">💧</div>
-                        <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${data.humidity > 70 ? 'bg-blue-500 text-white' : data.humidity > 50 ? 'bg-cyan-400 text-white' : 'bg-yellow-400 text-white'}`}>
-                          {data.humidity > 70 ? 'High' : data.humidity > 50 ? 'Good' : 'Low'}
+                      {/* Humidity */}
+                      <div className="bg-gradient-to-br from-white to-blue-50 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 h-full border border-blue-100">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-3xl">💧</div>
+                          <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${data.humidity > 70 ? 'bg-blue-500 text-white' : data.humidity > 50 ? 'bg-cyan-400 text-white' : 'bg-yellow-400 text-white'}`}>
+                            {data.humidity > 70 ? 'High' : data.humidity > 50 ? 'Good' : 'Low'}
+                          </div>
+                        </div>
+                        <h4 className="text-gray-600 text-sm font-semibold mb-2">Humidity</h4>
+                        <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+                          {data.humidity.toFixed(1)}%
                         </div>
                       </div>
-                      <h4 className="text-gray-600 text-sm font-semibold mb-2">Humidity</h4>
-                      <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">{data.humidity.toFixed(1)}%</div>
-                    </div>
 
-                    <div className="bg-gradient-to-br from-white to-green-50 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 h-full border border-green-100">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-3xl">🌿</div>
-                        <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${data.soilMoisture === 'WET' ? 'bg-blue-500 text-white' : 'bg-orange-500 text-white'}`}>
+                      {/* Soil Moisture */}
+                      <div className="bg-gradient-to-br from-white to-green-50 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 h-full border border-green-100">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-3xl">🌿</div>
+                          <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${data.soilMoisture === 'WET' ? 'bg-blue-500 text-white' : 'bg-orange-500 text-white'}`}>
+                            {data.soilMoisture}
+                          </div>
+                        </div>
+                        <h4 className="text-gray-600 text-sm font-semibold mb-2">Soil Moisture</h4>
+                        <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                           {data.soilMoisture}
                         </div>
                       </div>
-                      <h4 className="text-gray-600 text-sm font-semibold mb-2">Soil Moisture</h4>
-                      <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">{data.soilMoisture}</div>
-                    </div>
 
-                    <div className="bg-gradient-to-br from-white to-purple-50 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 h-full border border-purple-100">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-3xl">🌫️</div>
-                        <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${data.pollution && data.pollution > 100 ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}>
-                          {data.pollution ? (data.pollution > 100 ? 'High' : 'Safe') : 'N/A'}
+                      {/* Air Quality */}
+                      <div className="bg-gradient-to-br from-white to-purple-50 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 h-full border border-purple-100">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-3xl">🌫️</div>
+                          <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${data.pollution && data.pollution > 100 ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}>
+                            {data.pollution ? (data.pollution > 100 ? 'High' : 'Safe') : 'N/A'}
+                          </div>
+                        </div>
+                        <h4 className="text-gray-600 text-sm font-semibold mb-2">Air Quality</h4>
+                        <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                          {data.pollution ?? '—'}
                         </div>
                       </div>
-                      <h4 className="text-gray-600 text-sm font-semibold mb-2">Air Quality</h4>
-                      <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">{data.pollution ?? '—'}</div>
                     </div>
-                  </div>
                   ) : (
                     <div className="flex items-center justify-center h-full bg-gradient-to-br from-white to-green-50 rounded-2xl p-6 shadow-xl border-2 border-dashed border-green-200">
                       <div className="text-center">
                         <div className="text-6xl mb-4 animate-pulse">⏳</div>
                         <p className="text-xl text-gray-700 font-bold mb-2">Menunggu Data ESP32...</p>
-                        <p className="text-sm text-gray-500">Koneksi ke sensor sedang diproses</p>
+                        <p className="text-sm text-gray-500">Panel ID: {panelId || 'Loading...'}</p>
                         <div className="mt-4 flex justify-center space-x-2">
                           <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
                           <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
@@ -268,9 +286,9 @@ export default function Home() {
                 </div>
               </div>
             </div> 
-            </div> {/* Penutup wrapper padding */}
-          </main>
-     </div>
-    </>
+          </div>
+        </main>
+      </div>
+    </>
   );
 }
